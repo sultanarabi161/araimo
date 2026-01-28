@@ -16,9 +16,10 @@ import 'package:flutter_spinkit/flutter_spinkit.dart';
 // --- CONFIGURATION ---
 const String appName = "araimo";
 const String developerName = "sultanarabi161";
+// আপনার দেওয়া JSON URL
 const String configUrl = "https://raw.githubusercontent.com/mxonlive/araimo/refs/heads/main/data.json";
 const String contactEmail = "mailto:sultanarabi161@gmail.com";
-const String telegramUrl = "https://t.me/araimo"; // Update if needed
+const String telegramUrl = "https://t.me/araimo"; 
 
 const Map<String, String> defaultHeaders = {
   "User-Agent": "araimo-agent/1.0.0 (Android; Secure)",
@@ -38,6 +39,8 @@ final customCacheManager = fcm.CacheManager(
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   WakelockPlus.enable();
+  
+  // Firebase ইমিট করা হয়েছে কারণ google-services.json নেই
   
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
@@ -85,8 +88,8 @@ class AraimoApp extends StatelessWidget {
       title: appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // mxlive Background
-        primaryColor: const Color(0xFFFF3B30), // mxlive Red
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // mxlive dark bg
+        primaryColor: const Color(0xFFFF3B30), // mxlive red
         appBarTheme: const AppBarTheme(
           backgroundColor: Color(0xFF141414),
           elevation: 0,
@@ -119,7 +122,7 @@ class ChannelLogo extends StatelessWidget {
   Widget _fallback() => Padding(padding: const EdgeInsets.all(8.0), child: Opacity(opacity: 0.3, child: Image.asset('assets/logo.png', fit: BoxFit.contain)));
 }
 
-// --- SPLASH SCREEN (mxlive Design) ---
+// --- SPLASH SCREEN ---
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
   @override
@@ -159,7 +162,7 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 }
 
-// --- HOME PAGE (mxlive Design) ---
+// --- HOME PAGE ---
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
   @override
@@ -193,7 +196,7 @@ class _HomePageState extends State<HomePage> {
       await _fetchFromUrl(configUrl); 
     } catch (e) {
        setState(() { isConfigLoading = false; }); 
-       _showMsg("Network Error: $e", isError: true); 
+       _showMsg("Network Error", isError: true); 
     }
   }
 
@@ -204,11 +207,9 @@ class _HomePageState extends State<HomePage> {
 
   void _parseConfig(Map<String, dynamic> data) {
     List<ServerItem> loadedServers = [];
-    // Handle generic server parsing or single playlist logic
     if (data['servers'] != null) { 
       for (var s in data['servers']) { loadedServers.add(ServerItem(id: s['id'].toString(), name: s['name'], url: s['url'])); } 
     } else if (data['playlist_url'] != null) {
-      // Fallback if generic JSON structure
       loadedServers.add(ServerItem(id: "1", name: "Main Server", url: data['playlist_url']));
     }
 
@@ -293,20 +294,20 @@ class _HomePageState extends State<HomePage> {
         child: isConfigLoading 
             ? const Center(child: SpinKitFadingCircle(color: Colors.redAccent, size: 50))
             : Column(children: [
-                  // Notice - EXACT mxlive design
+                  // Notice 
                   if(appConfig.notice.isNotEmpty) Container(height: 35, margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.redAccent.withOpacity(0.3))), child: ClipRRect(borderRadius: BorderRadius.circular(30), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 12), color: Colors.redAccent.withOpacity(0.15), height: double.infinity, child: const Icon(Icons.campaign_rounded, size: 18, color: Colors.redAccent)), Expanded(child: Marquee(text: appConfig.notice, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500), scrollAxis: Axis.horizontal, blankSpace: 20.0, velocity: 40.0, startPadding: 10.0))]))),
                   
-                  // Search - EXACT mxlive design
+                  // Search
                   Container(height: 45, margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white10)), child: TextField(controller: searchController, onChanged: _onSearchChanged, style: const TextStyle(color: Colors.white), cursorColor: Colors.redAccent, decoration: InputDecoration(hintText: "Search Channels...", hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14), prefixIcon: const Icon(Icons.search, color: Colors.grey), suffixIcon: searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 18, color: Colors.grey), onPressed: () { searchController.clear(); _onSearchChanged(""); }) : null, border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 10)))),
                   
                   const SizedBox(height: 10),
                   
-                  // Server List (If multiple) - EXACT mxlive design
+                  // Servers
                   if(appConfig.servers.length > 1) SizedBox(height: 38, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: appConfig.servers.length, itemBuilder: (ctx, index) { final srv = appConfig.servers[index]; final isSelected = selectedServer?.id == srv.id; return Padding(padding: const EdgeInsets.only(right: 10), child: GestureDetector(onTap: () { setState(() => selectedServer = srv); loadPlaylist(srv.url); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: isSelected ? Colors.blueAccent : const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(20), border: isSelected ? null : Border.all(color: Colors.white10)), child: Text(srv.name, style: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))))); })),
                   
                   const Divider(color: Colors.white10, height: 20),
                   
-                  // Channel Grid - EXACT mxlive design
+                  // Grid
                   Expanded(child: isPlaylistLoading ? const Center(child: SpinKitPulse(color: Colors.blueAccent, size: 40)) : _buildGroupedChannelList()),
                 ]),
       ),
@@ -326,7 +327,7 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
-// --- PLAYER SCREEN (mxlive Design) ---
+// --- PLAYER SCREEN ---
 class PlayerScreen extends StatefulWidget {
   final Channel channel; final List<Channel> allChannels;
   const PlayerScreen({super.key, required this.channel, required this.allChannels});
@@ -335,22 +336,40 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen> {
-  late PodPlayerController _podController; late List<Channel> relatedChannels; bool isError = false;
+  late PodPlayerController _podController; 
+  late List<Channel> relatedChannels; 
+  bool isError = false;
+
   @override
   void initState() {
-    super.initState(); WakelockPlus.enable();
+    super.initState(); 
+    WakelockPlus.enable();
     relatedChannels = widget.allChannels.where((c) => c.group == widget.channel.group && c.name != widget.channel.name).toList();
     _initializePlayer();
   }
+
   Future<void> _initializePlayer() async {
     setState(() { isError = false; });
     try {
-      _podController = PodPlayerController(playVideoFrom: PlayVideoFrom.network(widget.channel.url, httpHeaders: widget.channel.headers), podPlayerConfig: const PodPlayerConfig(autoPlay: true, isLooping: true, videoQualityPriority: [720, 1080, 480], wakelockEnabled: true))..initialise().then((_) { if(mounted) setState(() {}); });
-      _podController.addListener(() { if (_podController.videoPlayerValue?.hasError ?? false) { if(mounted) setState(() { isError = true; }); } });
+      _podController = PodPlayerController(
+        playVideoFrom: PlayVideoFrom.network(widget.channel.url, httpHeaders: widget.channel.headers), 
+        podPlayerConfig: const PodPlayerConfig(autoPlay: true, isLooping: true, videoQualityPriority: [720, 1080, 480], wakelockEnabled: true)
+      )..initialise().then((_) { if(mounted) setState(() {}); });
+      
+      _podController.addListener(() { 
+        if (_podController.videoPlayerValue?.hasError ?? false) { if(mounted) setState(() { isError = true; }); } 
+      });
     } catch (e) { if(mounted) setState(() { isError = true; }); }
   }
+
   @override
-  void dispose() { try { _podController.dispose(); } catch(e) {} SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); WakelockPlus.disable(); super.dispose(); }
+  void dispose() { 
+    try { _podController.dispose(); } catch(e) {} 
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); 
+    WakelockPlus.disable(); 
+    super.dispose(); 
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -367,7 +386,7 @@ class _PlayerScreenState extends State<PlayerScreen> {
   }
 }
 
-// --- INFO PAGE (mxlive Design) ---
+// --- INFO PAGE ---
 class InfoPage extends StatelessWidget {
   final AppConfig config; const InfoPage({super.key, required this.config});
   @override
