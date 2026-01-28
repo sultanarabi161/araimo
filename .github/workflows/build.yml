@@ -1,0 +1,59 @@
+name: Araimo Final Build
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build APK (Araimo)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Generate Android Project
+        run: |
+          # 1. Create fresh Android project
+          flutter create . --org com.araimo.app --project-name araimo
+          
+          # 2. Inject Permissions
+          sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <application/' android/app/src/main/AndroidManifest.xml
+          
+          # 3. Enable PiP Support & Cleartext Traffic (Important)
+          # android:supportsPictureInPicture="true" is added here
+          sed -i 's/android:label="araimo"/android:label="araimo" android:supportsPictureInPicture="true" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+
+          # 4. Fix MinSDK (21+) for Video Player
+          sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      # --- ICON GENERATION ---
+      - name: Generate App Icon
+        run: dart run flutter_launcher_icons
+
+      - name: Build APK
+        run: flutter build apk --release --split-per-abi
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-apk
+          path: build/app/outputs/flutter-apk/*.apk
+          compression-level: 9
