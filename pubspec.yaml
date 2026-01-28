@@ -13,10 +13,10 @@ dependencies:
   cupertino_icons: ^1.0.6
   google_fonts: ^6.1.0
   marquee: ^2.2.3
-  flutter_spinkit: ^5.2.0  # Added for Loading Animation
+  flutter_spinkit: ^5.2.0
   
-  # Player
-  pod_player: ^0.3.1       # mxlive player
+  # Player (FIXED VERSION)
+  pod_player: ^0.2.2       
   wakelock_plus: ^1.1.4
   
   # Network & Cache
