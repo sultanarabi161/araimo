@@ -11,19 +11,19 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-// --- CONFIGURATION ---
+// --- APP CONFIG ---
 const String appName = "araimo";
 const String developerName = "sultanarabi161";
 const String logoPath = "assets/logo.png";
-const String customUserAgent = "AraimoPlayer/3.0 (Linux; Android 10) ExoPlayerLib/2.18.1";
+const String customUserAgent = "AraimoPlayer/4.0 (Linux; Android 10) ExoPlayerLib/2.18.1";
 const String configJsonUrl = "https://raw.githubusercontent.com/mxonlive/araimo/refs/heads/main/data.json";
 
-// --- FLAT DESIGN PALETTE ---
-const Color kBgColor = Color(0xFF050505);       // Deepest Black
-const Color kCardColor = Color(0xFF141414);     // Flat Grey Surface
-const Color kAccentColor = Color(0xFFFF0033);   // Electric Red
-const Color kTextPrimary = Color(0xFFEEEEEE);   // Off-White
-const Color kTextSecondary = Color(0xFFAAAAAA); // Grey Text
+// --- CLASSIC MODERN PALETTE ---
+const Color kBgColor = Color(0xFF121212);        // Rich Dark Background
+const Color kSurfaceColor = Color(0xFF1E2228);   // Soft Blue-Grey Surface
+const Color kAccentColor = Color(0xFFE50914);    // Classic Sports Red
+const Color kTextPrimary = Color(0xFFF5F5F5);    // White Smoke
+const Color kTextSecondary = Color(0xFF9E9E9E);  // Grey
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -51,18 +51,20 @@ class AraimoApp extends StatelessWidget {
         primaryColor: kAccentColor,
         colorScheme: const ColorScheme.dark(
           primary: kAccentColor,
-          surface: kCardColor,
+          surface: kSurfaceColor,
           background: kBgColor,
         ),
-        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme).apply( // Changed to Inter font for Flat look
+        // Using 'Rubik' for a sturdy, modern sports feel
+        textTheme: GoogleFonts.rubikTextTheme(Theme.of(context).textTheme).apply(
           bodyColor: kTextPrimary,
           displayColor: kTextPrimary,
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: kBgColor,
+          surfaceTintColor: Colors.transparent,
           elevation: 0,
-          scrolledUnderElevation: 0,
           centerTitle: true,
+          iconTheme: IconThemeData(color: kTextPrimary),
         ),
       ),
       home: const HomePage(),
@@ -70,14 +72,14 @@ class AraimoApp extends StatelessWidget {
   }
 }
 
-// --- LOGIC ---
+// --- DATA PROVIDER ---
 class AppDataProvider extends ChangeNotifier {
   List<dynamic> allChannels = [];
   List<String> groups = ["All"];
   List<dynamic> displayedChannels = [];
   String selectedGroup = "All";
   Map<String, dynamic> config = {
-    "notice": "Welcome to Araimo",
+    "notice": "Loading updates...",
     "playlist_url": "",
     "about_notice": "",
     "telegram_url": "",
@@ -97,7 +99,7 @@ class AppDataProvider extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         config = {
-          "notice": data['notice'] ?? "Welcome",
+          "notice": data['notice'] ?? "Welcome to Araimo",
           "playlist_url": data['playlist_url'] ?? "",
           "about_notice": data['about_notice'] ?? "",
           "telegram_url": data['telegram_url'] ?? "",
@@ -151,7 +153,7 @@ class AppDataProvider extends ChangeNotifier {
   }
 }
 
-// --- HOME PAGE (FLAT DESIGN) ---
+// --- HOME PAGE (Classic Modern) ---
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -161,37 +163,40 @@ class HomePage extends StatelessWidget {
 
     return Scaffold(
       appBar: AppBar(
-        leading: Padding(padding: const EdgeInsets.all(14), child: Image.asset(logoPath)),
-        title: Text(appName.toUpperCase(), style: const TextStyle(fontFamily: 'GoogleFonts.bebasNeue', fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.white, fontSize: 24)),
+        leading: Padding(padding: const EdgeInsets.all(12), child: Image.asset(logoPath)),
+        title: Text(
+          appName.toUpperCase(), 
+          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3, fontSize: 22)
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.info_outline_rounded, color: Colors.white54), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage()))),
+          IconButton(
+            icon: const Icon(Icons.info_outline), 
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage()))
+          ),
         ],
       ),
       body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator(color: kAccentColor, strokeWidth: 2))
+          ? const Center(child: CircularProgressIndicator(color: kAccentColor))
           : Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. FLAT NOTIFICATION BAR
+                // 1. NEWS TICKER STYLE NOTICE
                 Container(
                   width: double.infinity,
-                  height: 44,
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  decoration: BoxDecoration(
-                    color: kCardColor,
-                    borderRadius: BorderRadius.circular(8), // Small radius for flat look
-                  ),
+                  height: 36,
+                  color: kSurfaceColor, // Full width strip
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
-                        child: const Icon(Icons.notifications_none_rounded, color: kAccentColor, size: 20),
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        height: 36,
+                        color: kAccentColor,
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.campaign, color: Colors.white, size: 20),
                       ),
                       Expanded(
                         child: Marquee(
-                          text: provider.config['notice'] + "     ●     ",
-                          style: const TextStyle(color: kTextSecondary, fontSize: 13, fontWeight: FontWeight.w500),
+                          text: provider.config['notice'] + "      •      ",
+                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kTextPrimary),
                           velocity: 30,
                           blankSpace: 20,
                         ),
@@ -200,32 +205,36 @@ class HomePage extends StatelessWidget {
                   ),
                 ),
 
-                // 2. CATEGORY TABS (Minimal Text)
+                const SizedBox(height: 10),
+
+                // 2. CATEGORIES (Pill Style)
                 SizedBox(
                   height: 40,
                   child: ListView.builder(
                     scrollDirection: Axis.horizontal,
                     itemCount: provider.groups.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
                     itemBuilder: (context, index) {
                       final group = provider.groups[index];
                       final isSelected = group == provider.selectedGroup;
                       return GestureDetector(
                         onTap: () => provider.filterChannels(group),
                         child: Container(
-                          margin: const EdgeInsets.only(right: 20),
-                          alignment: Alignment.center,
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           decoration: BoxDecoration(
-                            border: isSelected ? const Border(bottom: BorderSide(color: kAccentColor, width: 2)) : null
+                            color: isSelected ? kTextPrimary : Colors.transparent,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: isSelected ? kTextPrimary : kTextSecondary.withOpacity(0.5)),
                           ),
+                          alignment: Alignment.center,
                           child: Text(
-                            group.toUpperCase(),
+                            group, 
                             style: TextStyle(
-                              color: isSelected ? kAccentColor : kTextSecondary,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              letterSpacing: 0.5
-                            ),
+                              color: isSelected ? kBgColor : kTextSecondary,
+                              fontWeight: FontWeight.bold, 
+                              fontSize: 12
+                            )
                           ),
                         ),
                       );
@@ -235,15 +244,15 @@ class HomePage extends StatelessWidget {
 
                 const SizedBox(height: 10),
 
-                // 3. CHANNELS GRID (Clean & Flat)
+                // 3. GRID CONTENT
                 Expanded(
                   child: GridView.builder(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.all(16),
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 4,
-                      childAspectRatio: 0.75,
+                      childAspectRatio: 0.70,
                       crossAxisSpacing: 12,
-                      mainAxisSpacing: 20,
+                      mainAxisSpacing: 16,
                     ),
                     itemCount: provider.displayedChannels.length,
                     itemBuilder: (context, index) {
@@ -252,15 +261,16 @@ class HomePage extends StatelessWidget {
                         onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: channel))),
                         child: Column(
                           children: [
-                            // Logo Container
                             Expanded(
                               child: Container(
-                                width: double.infinity,
-                                padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: kCardColor, // Flat grey background
+                                  color: kSurfaceColor,
                                   borderRadius: BorderRadius.circular(12),
+                                  boxShadow: [
+                                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))
+                                  ]
                                 ),
+                                padding: const EdgeInsets.all(10),
                                 child: CachedNetworkImage(
                                   imageUrl: channel['logo'],
                                   fit: BoxFit.contain,
@@ -269,12 +279,12 @@ class HomePage extends StatelessWidget {
                               ),
                             ),
                             const SizedBox(height: 8),
-                            // Text
                             Text(
                               channel['name'],
-                              maxLines: 1,
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, color: kTextSecondary, fontWeight: FontWeight.w500),
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: kTextSecondary),
                             ),
                           ],
                         ),
@@ -288,7 +298,7 @@ class HomePage extends StatelessWidget {
   }
 }
 
-// --- PLAYER PAGE (Clean Interface) ---
+// --- PLAYER PAGE ---
 class PlayerPage extends StatefulWidget {
   final Map<String, dynamic> channel;
   const PlayerPage({super.key, required this.channel});
@@ -322,7 +332,7 @@ class _PlayerPageState extends State<PlayerPage> {
         aspectRatio: 16 / 9,
         allowFullScreen: true,
         showControls: true,
-        materialProgressColors: ChewieProgressColors(playedColor: kAccentColor, handleColor: kAccentColor, backgroundColor: Colors.grey.shade800),
+        materialProgressColors: ChewieProgressColors(playedColor: kAccentColor, handleColor: kAccentColor),
       );
       setState(() {});
     } catch (e) {
@@ -350,7 +360,7 @@ class _PlayerPageState extends State<PlayerPage> {
       body: SafeArea(
         child: Column(
           children: [
-            // VIDEO AREA
+            // VIDEO
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
@@ -361,56 +371,71 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
 
-            // INFO AREA
+            // CHANNEL INFO
             Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 10),
-              color: kBgColor,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              padding: const EdgeInsets.all(20),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: kSurfaceColor))
+              ),
+              child: Row(
                 children: [
-                  Text(widget.channel['name'], style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.white)),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: kAccentColor, borderRadius: BorderRadius.circular(4)), child: const Text("LIVE", style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold))),
-                      const SizedBox(width: 10),
-                      Text(widget.channel['group'], style: const TextStyle(color: kTextSecondary, fontSize: 12)),
-                    ],
-                  )
+                  Container(
+                    width: 45, height: 45,
+                    padding: const EdgeInsets.all(5),
+                    decoration: BoxDecoration(color: kSurfaceColor, borderRadius: BorderRadius.circular(8)),
+                    child: CachedNetworkImage(imageUrl: widget.channel['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv)),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(widget.channel['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 4),
+                        Text("● LIVE  |  ${widget.channel['group']}", style: const TextStyle(fontSize: 11, color: kAccentColor, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
 
-            const Divider(color: kCardColor, height: 1),
+            // RELATED HEADER
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
+              color: kBgColor,
+              child: const Text("UP NEXT", style: TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ),
 
-            // RELATED CHANNELS
+            // RELATED LIST
             Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(0),
+              child: ListView.separated(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 itemCount: related.length,
+                separatorBuilder: (_,__) => const SizedBox(height: 8),
                 itemBuilder: (context, index) {
                   final item = related[index];
                   return Material(
                     color: Colors.transparent,
                     child: InkWell(
+                      borderRadius: BorderRadius.circular(8),
                       onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: item))),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 15),
-                        decoration: const BoxDecoration(
-                          border: Border(bottom: BorderSide(color: kCardColor)),
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: kSurfaceColor,
+                          borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
                           children: [
-                            Container(
-                              width: 50, height: 35,
-                              decoration: BoxDecoration(color: kCardColor, borderRadius: BorderRadius.circular(4)),
-                              padding: const EdgeInsets.all(4),
-                              child: CachedNetworkImage(imageUrl: item['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv, size: 15, color: Colors.grey)),
+                            SizedBox(
+                              width: 40, 
+                              child: CachedNetworkImage(imageUrl: item['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv, size: 16, color: Colors.grey)),
                             ),
                             const SizedBox(width: 15),
-                            Expanded(child: Text(item['name'], style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500))),
-                            const Icon(Icons.play_arrow_rounded, color: kTextSecondary, size: 20),
+                            Expanded(child: Text(item['name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
+                            const Icon(Icons.play_circle_outline, color: kTextSecondary, size: 22),
                           ],
                         ),
                       ),
@@ -426,7 +451,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 }
 
-// --- INFO PAGE (Minimal) ---
+// --- INFO PAGE ---
 class InfoPage extends StatelessWidget {
   const InfoPage({super.key});
 
@@ -434,43 +459,52 @@ class InfoPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final config = Provider.of<AppDataProvider>(context).config;
     return Scaffold(
-      appBar: AppBar(title: const Text("APP INFO", style: TextStyle(fontSize: 14, letterSpacing: 2))),
+      appBar: AppBar(title: const Text("Information")),
       body: ListView(
-        padding: const EdgeInsets.all(30),
+        padding: const EdgeInsets.all(25),
         children: [
-          Center(child: Image.asset(logoPath, height: 70)),
-          const SizedBox(height: 30),
-          const Center(child: Text(appName, style: TextStyle(fontSize: 30, fontWeight: FontWeight.w900, letterSpacing: -1))),
-          const Center(child: Text("VERSION 1.0.0", style: TextStyle(color: kAccentColor, fontSize: 10, letterSpacing: 2, fontWeight: FontWeight.bold))),
+          Center(child: Image.asset(logoPath, height: 90)),
+          const SizedBox(height: 25),
+          const Center(child: Text(appName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 2))),
+          const Center(child: Text("VERSION 1.0.0", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 3))),
+          const SizedBox(height: 40),
           
-          const SizedBox(height: 50),
-          _item("Developer", developerName, null),
-          _item("About", config['about_notice'], null),
-          if (config['show_update']) _item("Update Available", config['update_note'], () => launchUrl(Uri.parse(config['dl_url']))),
-          _item("Community", "Join Telegram", () => launchUrl(Uri.parse(config['telegram_url']))),
+          _sectionTitle("DEVELOPER"),
+          _infoTile(Icons.code, developerName, null),
+          
+          const SizedBox(height: 20),
+          _sectionTitle("ABOUT"),
+          _infoTile(Icons.info_outline, config['about_notice'], null),
+          
+          if (config['show_update']) ...[
+            const SizedBox(height: 20),
+            _sectionTitle("UPDATES"),
+            _infoTile(Icons.system_update, config['update_note'], () => launchUrl(Uri.parse(config['dl_url']))),
+          ],
+          
+          const SizedBox(height: 20),
+          _sectionTitle("COMMUNITY"),
+          _infoTile(Icons.telegram, "Join Official Channel", () => launchUrl(Uri.parse(config['telegram_url']))),
         ],
       ),
     );
   }
 
-  Widget _item(String title, String sub, VoidCallback? onTap) {
+  Widget _sectionTitle(String title) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 25),
-      child: InkWell(
+      padding: const EdgeInsets.only(bottom: 10, left: 5),
+      child: Text(title, style: const TextStyle(color: kAccentColor, fontSize: 11, fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Widget _infoTile(IconData icon, String text, VoidCallback? onTap) {
+    return Container(
+      decoration: BoxDecoration(color: kSurfaceColor, borderRadius: BorderRadius.circular(8)),
+      child: ListTile(
+        leading: Icon(icon, color: kTextPrimary, size: 20),
+        title: Text(text, style: const TextStyle(fontSize: 14)),
+        trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey) : null,
         onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title.toUpperCase(), style: const TextStyle(color: kTextSecondary, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
-            const SizedBox(height: 5),
-            Row(
-              children: [
-                Expanded(child: Text(sub, style: TextStyle(fontSize: 14, color: onTap != null ? kAccentColor : kTextPrimary))),
-                if (onTap != null) const Icon(Icons.arrow_outward, color: kAccentColor, size: 14),
-              ],
-            ),
-          ],
-        ),
       ),
     );
   }
