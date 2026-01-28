@@ -1,4 +1,4 @@
-name: Araimo Final Build
+name: Araimo Auto Build
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    name: Build APK (Araimo)
+    name: Build APK
     runs-on: ubuntu-latest
 
     steps:
@@ -28,24 +28,21 @@ jobs:
 
       - name: Generate Android Project
         run: |
-          # 1. Create fresh Android project
           flutter create . --org com.araimo.app --project-name araimo
           
-          # 2. Inject Permissions
+          # Inject Permissions
           sed -i 's/<application/<uses-permission android:name="android.permission.INTERNET"\/>\n    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE"\/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"\/>\n    <application/' android/app/src/main/AndroidManifest.xml
           
-          # 3. Enable PiP Support & Cleartext Traffic (Important)
-          # android:supportsPictureInPicture="true" is added here
-          sed -i 's/android:label="araimo"/android:label="araimo" android:supportsPictureInPicture="true" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|density|uiMode" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
+          # Enable Cleartext
+          sed -i 's/android:label="araimo"/android:label="araimo" android:usesCleartextTraffic="true"/' android/app/src/main/AndroidManifest.xml
 
-          # 4. Fix MinSDK (21+) for Video Player
+          # MinSDK Fix
           sed -i 's/minSdk = flutter.minSdkVersion/minSdk = 21/' android/app/build.gradle.kts
 
       - name: Install Dependencies
         run: flutter pub get
 
-      # --- ICON GENERATION ---
-      - name: Generate App Icon
+      - name: Generate Icon
         run: dart run flutter_launcher_icons
 
       - name: Build APK
