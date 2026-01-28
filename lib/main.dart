@@ -1,41 +1,81 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
-import 'package:video_player/video_player.dart';
-import 'package:chewie/chewie.dart';
-import 'package:marquee/marquee.dart';
-import 'package:provider/provider.dart';
-import 'package:google_fonts/google_fonts.dart';
-import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_cache_manager/flutter_cache_manager.dart' as fcm; 
+import 'package:pod_player/pod_player.dart';
+import 'package:marquee/marquee.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:flutter_spinkit/flutter_spinkit.dart';
 
-// --- APP CONFIG ---
+// --- CONFIGURATION ---
 const String appName = "araimo";
 const String developerName = "sultanarabi161";
-const String logoPath = "assets/logo.png";
-const String customUserAgent = "AraimoPlayer/4.0 (Linux; Android 10) ExoPlayerLib/2.18.1";
-const String configJsonUrl = "https://raw.githubusercontent.com/mxonlive/araimo/refs/heads/main/data.json";
+const String configUrl = "https://raw.githubusercontent.com/mxonlive/araimo/refs/heads/main/data.json";
+const String contactEmail = "mailto:sultanarabi161@gmail.com";
+const String telegramUrl = "https://t.me/araimo"; // Update if needed
 
-// --- CLASSIC MODERN PALETTE ---
-const Color kBgColor = Color(0xFF121212);        // Rich Dark Background
-const Color kSurfaceColor = Color(0xFF1E2228);   // Soft Blue-Grey Surface
-const Color kAccentColor = Color(0xFFE50914);    // Classic Sports Red
-const Color kTextPrimary = Color(0xFFF5F5F5);    // White Smoke
-const Color kTextSecondary = Color(0xFF9E9E9E);  // Grey
+const Map<String, String> defaultHeaders = {
+  "User-Agent": "araimo-agent/1.0.0 (Android; Secure)",
+};
 
-void main() {
+// --- CACHE MANAGER ---
+final customCacheManager = fcm.CacheManager(
+  fcm.Config(
+    'araimo_core_cache', 
+    stalePeriod: const Duration(days: 3), 
+    maxNrOfCacheObjects: 500, 
+    repo: fcm.JsonCacheInfoRepository(databaseName: 'araimo_core_cache'),
+    fileService: fcm.HttpFileService(),
+  ),
+);
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  runApp(
-    MultiProvider(
-      providers: [ChangeNotifierProvider(create: (_) => AppDataProvider())],
-      child: const AraimoApp(),
-    ),
-  );
+  WakelockPlus.enable();
+  
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    systemNavigationBarColor: Color(0xFF0F0F0F),
+    statusBarIconBrightness: Brightness.light,
+  ));
+  
+  runApp(const AraimoApp());
 }
 
+// --- MODELS ---
+class ServerItem {
+  final String id;
+  final String name;
+  final String url;
+  ServerItem({required this.id, required this.name, required this.url});
+}
+
+class Channel {
+  final String name;
+  final String logo;
+  final String url;
+  final String group;
+  final Map<String, String> headers;
+
+  Channel({required this.name, required this.logo, required this.url, required this.group, this.headers = const {}});
+}
+
+class AppConfig {
+  String notice;
+  String aboutNotice;
+  Map<String, dynamic>? updateData;
+  List<ServerItem> servers;
+
+  AppConfig({this.notice = "Welcome to araimo", this.aboutNotice = "No info.", this.updateData, this.servers = const []});
+}
+
+// --- APP ROOT ---
 class AraimoApp extends StatelessWidget {
   const AraimoApp({super.key});
 
@@ -44,468 +84,297 @@ class AraimoApp extends StatelessWidget {
     return MaterialApp(
       title: appName,
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: kBgColor,
-        primaryColor: kAccentColor,
-        colorScheme: const ColorScheme.dark(
-          primary: kAccentColor,
-          surface: kSurfaceColor,
-          background: kBgColor,
-        ),
-        // Using 'Rubik' for a sturdy, modern sports feel
-        textTheme: GoogleFonts.rubikTextTheme(Theme.of(context).textTheme).apply(
-          bodyColor: kTextPrimary,
-          displayColor: kTextPrimary,
-        ),
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: const Color(0xFF0F0F0F), // mxlive Background
+        primaryColor: const Color(0xFFFF3B30), // mxlive Red
         appBarTheme: const AppBarTheme(
-          backgroundColor: kBgColor,
-          surfaceTintColor: Colors.transparent,
+          backgroundColor: Color(0xFF141414),
           elevation: 0,
           centerTitle: true,
-          iconTheme: IconThemeData(color: kTextPrimary),
+          titleTextStyle: TextStyle(fontWeight: FontWeight.bold, fontSize: 20, fontFamily: 'Sans'),
         ),
+        textTheme: GoogleFonts.poppinsTextTheme(ThemeData.dark().textTheme),
+        useMaterial3: true,
       ),
-      home: const HomePage(),
+      home: const SplashScreen(),
     );
   }
 }
 
-// --- DATA PROVIDER ---
-class AppDataProvider extends ChangeNotifier {
-  List<dynamic> allChannels = [];
-  List<String> groups = ["All"];
-  List<dynamic> displayedChannels = [];
-  String selectedGroup = "All";
-  Map<String, dynamic> config = {
-    "notice": "Loading updates...",
-    "playlist_url": "",
-    "about_notice": "",
-    "telegram_url": "",
-    "show_update": false
-  };
-  bool isLoading = true;
-
-  AppDataProvider() {
-    initApp();
-  }
-
-  Future<void> initApp() async {
-    isLoading = true;
-    notifyListeners();
-    try {
-      final res = await http.get(Uri.parse(configJsonUrl));
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        config = {
-          "notice": data['notice'] ?? "Welcome to Araimo",
-          "playlist_url": data['playlist_url'] ?? "",
-          "about_notice": data['about_notice'] ?? "",
-          "telegram_url": data['telegram_url'] ?? "",
-          "show_update": data['update_data']?['show'] ?? false,
-          "update_ver": data['update_data']?['version'] ?? "",
-          "update_note": data['update_data']?['note'] ?? "",
-          "dl_url": data['update_data']?['download_url'] ?? "",
-        };
-        if (config['playlist_url'].isNotEmpty) await fetchM3U(config['playlist_url']);
-      }
-    } catch (_) {}
-    isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> fetchM3U(String url) async {
-    try {
-      final res = await http.get(Uri.parse(url));
-      if (res.statusCode == 200) parseM3U(res.body);
-    } catch (_) {}
-  }
-
-  void parseM3U(String content) {
-    final lines = LineSplitter.split(content).toList();
-    List<dynamic> channels = [];
-    Set<String> groupSet = {"All"};
-
-    for (int i = 0; i < lines.length; i++) {
-      if (lines[i].startsWith("#EXTINF")) {
-        String info = lines[i];
-        String url = (i + 1 < lines.length) ? lines[i + 1] : "";
-        String name = info.split(',').last.trim();
-        String group = info.contains('group-title="') ? info.split('group-title="')[1].split('"')[0] : "General";
-        String logo = info.contains('tvg-logo="') ? info.split('tvg-logo="')[1].split('"')[0] : "";
-        if (url.startsWith("http")) {
-          groupSet.add(group);
-          channels.add({"name": name, "group": group, "logo": logo, "url": url});
-        }
-      }
-    }
-    allChannels = channels;
-    groups = groupSet.toList()..sort();
-    if(groups.contains("All")) { groups.remove("All"); groups.insert(0, "All"); }
-    filterChannels("All");
-  }
-
-  void filterChannels(String group) {
-    selectedGroup = group;
-    displayedChannels = group == "All" ? allChannels : allChannels.where((c) => c['group'] == group).toList();
-    notifyListeners();
-  }
-}
-
-// --- HOME PAGE (Classic Modern) ---
-class HomePage extends StatelessWidget {
-  const HomePage({super.key});
-
+// --- LOGO WIDGET ---
+class ChannelLogo extends StatelessWidget {
+  final String url;
+  const ChannelLogo({super.key, required this.url});
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<AppDataProvider>(context);
+    if (url.isEmpty || !url.startsWith('http')) return _fallback();
+    return CachedNetworkImage(
+      imageUrl: url,
+      cacheManager: customCacheManager,
+      fit: BoxFit.contain,
+      placeholder: (context, url) => const Center(child: SpinKitPulse(color: Colors.redAccent, size: 15)),
+      errorWidget: (context, url, error) => _fallback(),
+    );
+  }
+  Widget _fallback() => Padding(padding: const EdgeInsets.all(8.0), child: Opacity(opacity: 0.3, child: Image.asset('assets/logo.png', fit: BoxFit.contain)));
+}
 
+// --- SPLASH SCREEN (mxlive Design) ---
+class SplashScreen extends StatefulWidget {
+  const SplashScreen({super.key});
+  @override
+  State<SplashScreen> createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen> {
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(const Duration(seconds: 2), () {
+      if(mounted) Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomePage()));
+    });
+  }
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: Padding(padding: const EdgeInsets.all(12), child: Image.asset(logoPath)),
-        title: Text(
-          appName.toUpperCase(), 
-          style: const TextStyle(fontWeight: FontWeight.w900, letterSpacing: 3, fontSize: 22)
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.info_outline), 
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage()))
-          ),
-        ],
-      ),
-      body: provider.isLoading
-          ? const Center(child: CircularProgressIndicator(color: kAccentColor))
-          : Column(
-              children: [
-                // 1. NEWS TICKER STYLE NOTICE
-                Container(
-                  width: double.infinity,
-                  height: 36,
-                  color: kSurfaceColor, // Full width strip
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        height: 36,
-                        color: kAccentColor,
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.campaign, color: Colors.white, size: 20),
-                      ),
-                      Expanded(
-                        child: Marquee(
-                          text: provider.config['notice'] + "      •      ",
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: kTextPrimary),
-                          velocity: 30,
-                          blankSpace: 20,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // 2. CATEGORIES (Pill Style)
-                SizedBox(
-                  height: 40,
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: provider.groups.length,
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    itemBuilder: (context, index) {
-                      final group = provider.groups[index];
-                      final isSelected = group == provider.selectedGroup;
-                      return GestureDetector(
-                        onTap: () => provider.filterChannels(group),
-                        child: Container(
-                          margin: const EdgeInsets.only(right: 10),
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          decoration: BoxDecoration(
-                            color: isSelected ? kTextPrimary : Colors.transparent,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: isSelected ? kTextPrimary : kTextSecondary.withOpacity(0.5)),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            group, 
-                            style: TextStyle(
-                              color: isSelected ? kBgColor : kTextSecondary,
-                              fontWeight: FontWeight.bold, 
-                              fontSize: 12
-                            )
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-
-                const SizedBox(height: 10),
-
-                // 3. GRID CONTENT
-                Expanded(
-                  child: GridView.builder(
-                    padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 4,
-                      childAspectRatio: 0.70,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 16,
-                    ),
-                    itemCount: provider.displayedChannels.length,
-                    itemBuilder: (context, index) {
-                      final channel = provider.displayedChannels[index];
-                      return GestureDetector(
-                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: channel))),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: kSurfaceColor,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4, offset: const Offset(0, 2))
-                                  ]
-                                ),
-                                padding: const EdgeInsets.all(10),
-                                child: CachedNetworkImage(
-                                  imageUrl: channel['logo'],
-                                  fit: BoxFit.contain,
-                                  errorWidget: (_,__,___) => Icon(Icons.tv, color: kTextSecondary.withOpacity(0.3)),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              channel['name'],
-                              maxLines: 2,
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: kTextSecondary),
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle, 
+                color: const Color(0xFF1E1E1E), 
+                boxShadow: [BoxShadow(color: Colors.red.withOpacity(0.3), blurRadius: 40)]
+              ),
+              child: ClipRRect(borderRadius: BorderRadius.circular(100), child: Image.asset('assets/logo.png', width: 100, height: 100)),
             ),
+            const SizedBox(height: 30),
+            const SpinKitThreeBounce(color: Colors.redAccent, size: 25),
+          ],
+        ),
+      ),
     );
   }
 }
 
-// --- PLAYER PAGE ---
-class PlayerPage extends StatefulWidget {
-  final Map<String, dynamic> channel;
-  const PlayerPage({super.key, required this.channel});
-
+// --- HOME PAGE (mxlive Design) ---
+class HomePage extends StatefulWidget {
+  const HomePage({super.key});
   @override
-  State<PlayerPage> createState() => _PlayerPageState();
+  State<HomePage> createState() => _HomePageState();
 }
 
-class _PlayerPageState extends State<PlayerPage> {
-  late VideoPlayerController _vc;
-  ChewieController? _cc;
-  bool isError = false;
+class _HomePageState extends State<HomePage> {
+  AppConfig appConfig = AppConfig();
+  ServerItem? selectedServer;
+  List<Channel> allChannels = [];
+  Map<String, List<Channel>> groupedChannels = {};
+  bool isConfigLoading = true;
+  bool isPlaylistLoading = false;
+  TextEditingController searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    WakelockPlus.enable();
-    initPlayer();
+    fetchConfig();
   }
 
-  Future<void> initPlayer() async {
-    try {
-      _vc = VideoPlayerController.networkUrl(
-        Uri.parse(widget.channel['url']),
-        httpHeaders: {'User-Agent': customUserAgent}
-      );
-      await _vc.initialize();
-      _cc = ChewieController(
-        videoPlayerController: _vc,
-        autoPlay: true,
-        aspectRatio: 16 / 9,
-        allowFullScreen: true,
-        showControls: true,
-        materialProgressColors: ChewieProgressColors(playedColor: kAccentColor, handleColor: kAccentColor),
-      );
-      setState(() {});
+  void _showMsg(String msg, {bool isError = false}) {
+    if(!mounted) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg, style: const TextStyle(color: Colors.white)), backgroundColor: isError ? Colors.red.shade900 : Colors.green.shade800, behavior: SnackBarBehavior.floating, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))));
+  }
+
+  Future<void> fetchConfig() async {
+    setState(() { isConfigLoading = true; });
+    try { 
+      await _fetchFromUrl(configUrl); 
     } catch (e) {
-      setState(() { isError = true; });
+       setState(() { isConfigLoading = false; }); 
+       _showMsg("Network Error: $e", isError: true); 
     }
   }
 
-  @override
-  void dispose() {
-    _vc.dispose();
-    _cc?.dispose();
-    WakelockPlus.disable();
-    super.dispose();
+  Future<void> _fetchFromUrl(String url) async {
+    final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+    if (res.statusCode == 200) { _parseConfig(jsonDecode(res.body)); } else { throw Exception("HTTP ${res.statusCode}"); }
+  }
+
+  void _parseConfig(Map<String, dynamic> data) {
+    List<ServerItem> loadedServers = [];
+    // Handle generic server parsing or single playlist logic
+    if (data['servers'] != null) { 
+      for (var s in data['servers']) { loadedServers.add(ServerItem(id: s['id'].toString(), name: s['name'], url: s['url'])); } 
+    } else if (data['playlist_url'] != null) {
+      // Fallback if generic JSON structure
+      loadedServers.add(ServerItem(id: "1", name: "Main Server", url: data['playlist_url']));
+    }
+
+    setState(() {
+      appConfig = AppConfig(
+        notice: data['notice'] ?? "Welcome to araimo", 
+        aboutNotice: data['about_notice'] ?? "No info.", 
+        updateData: data['update_data'], 
+        servers: loadedServers
+      );
+      if (loadedServers.isNotEmpty) { 
+        selectedServer = loadedServers[0]; 
+        isConfigLoading = false; 
+        loadPlaylist(loadedServers[0].url); 
+      } else { 
+        isConfigLoading = false; 
+        _showMsg("No Servers Found", isError: true); 
+      }
+    });
+  }
+
+  Future<void> loadPlaylist(String url) async {
+    setState(() { isPlaylistLoading = true; searchController.clear(); });
+    try {
+      final response = await http.get(Uri.parse(url), headers: defaultHeaders).timeout(const Duration(seconds: 15));
+      if (response.statusCode == 200) { parseM3u(response.body); } else { throw Exception("Failed"); }
+    } catch (e) { setState(() { isPlaylistLoading = false; }); _showMsg("Playlist Error", isError: true); }
+  }
+
+  void parseM3u(String content) {
+    List<String> lines = const LineSplitter().convert(content);
+    List<Channel> channels = [];
+    String? name; String? logo; String? group; Map<String, String> currentHeaders = {};
+
+    for (String line in lines) {
+      line = line.trim(); if (line.isEmpty) continue;
+      if (line.startsWith("#EXTINF:")) {
+        final nameMatch = RegExp(r',(.*)').firstMatch(line); name = nameMatch?.group(1)?.trim();
+        if (name == null || name.isEmpty) { final tvgName = RegExp(r'tvg-name="([^"]*)"').firstMatch(line); name = tvgName?.group(1); }
+        name ??= "Channel ${channels.length + 1}";
+        final logoMatch = RegExp(r'tvg-logo="([^"]*)"').firstMatch(line); logo = logoMatch?.group(1) ?? "";
+        final groupMatch = RegExp(r'group-title="([^"]*)"').firstMatch(line); group = groupMatch?.group(1) ?? "Others";
+      } else if (line.startsWith("#EXTVLCOPT:") || line.startsWith("#EXTHTTP:") || line.startsWith("#KODIPROP:")) {
+        String raw = line.substring(line.indexOf(":") + 1).trim();
+        if (raw.toLowerCase().startsWith("http-user-agent=") || raw.toLowerCase().startsWith("user-agent=")) { currentHeaders['User-Agent'] = raw.substring(raw.indexOf("=") + 1).trim(); } 
+      } else if (!line.startsWith("#")) {
+        if (name != null) {
+          if (!currentHeaders.containsKey('User-Agent')) currentHeaders['User-Agent'] = defaultHeaders['User-Agent']!;
+          channels.add(Channel(name: name, logo: logo ?? "", url: line, group: group ?? "Others", headers: Map.from(currentHeaders)));
+          name = null; currentHeaders = {}; 
+        }
+      }
+    }
+    setState(() { allChannels = channels; _updateGroupedChannels(channels); isPlaylistLoading = false; });
+  }
+
+  void _onSearchChanged(String query) {
+    if (query.isEmpty) { setState(() { _updateGroupedChannels(allChannels); }); } else {
+      final filtered = allChannels.where((c) => c.name.toLowerCase().contains(query.toLowerCase())).toList();
+      setState(() { _updateGroupedChannels(filtered); });
+    }
+  }
+
+  void _updateGroupedChannels(List<Channel> channels) {
+    Map<String, List<Channel>> groups = {};
+    for (var ch in channels) { if (!groups.containsKey(ch.group)) groups[ch.group] = []; groups[ch.group]!.add(ch); }
+    var sortedKeys = groups.keys.toList()..sort();
+    groupedChannels = { for (var k in sortedKeys) k: groups[k]! };
   }
 
   @override
   Widget build(BuildContext context) {
-    final provider = Provider.of<AppDataProvider>(context, listen: false);
-    final related = provider.allChannels
-        .where((c) => c['group'] == widget.channel['group'] && c['url'] != widget.channel['url'])
-        .toList();
-
     return Scaffold(
-      backgroundColor: kBgColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // VIDEO
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Container(
-                color: Colors.black,
-                child: isError 
-                  ? const Center(child: Icon(Icons.error_outline, color: kAccentColor)) 
-                  : (_cc != null ? Chewie(controller: _cc!) : const Center(child: CircularProgressIndicator(color: kAccentColor))),
-              ),
-            ),
-
-            // CHANNEL INFO
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: kSurfaceColor))
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 45, height: 45,
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(color: kSurfaceColor, borderRadius: BorderRadius.circular(8)),
-                    child: CachedNetworkImage(imageUrl: widget.channel['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv)),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(widget.channel['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 4),
-                        Text("● LIVE  |  ${widget.channel['group']}", style: const TextStyle(fontSize: 11, color: kAccentColor, fontWeight: FontWeight.bold)),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // RELATED HEADER
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 15, 20, 10),
-              color: kBgColor,
-              child: const Text("UP NEXT", style: TextStyle(color: kTextSecondary, fontSize: 12, fontWeight: FontWeight.bold, letterSpacing: 1)),
-            ),
-
-            // RELATED LIST
-            Expanded(
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: related.length,
-                separatorBuilder: (_,__) => const SizedBox(height: 8),
-                itemBuilder: (context, index) {
-                  final item = related[index];
-                  return Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: item))),
-                      child: Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: kSurfaceColor,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 40, 
-                              child: CachedNetworkImage(imageUrl: item['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv, size: 16, color: Colors.grey)),
-                            ),
-                            const SizedBox(width: 15),
-                            Expanded(child: Text(item['name'], style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500))),
-                            const Icon(Icons.play_circle_outline, color: kTextSecondary, size: 22),
-                          ],
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
+      appBar: AppBar(
+        title: const Text(appName, style: TextStyle(letterSpacing: 1.2)),
+        leading: Padding(padding: const EdgeInsets.all(10.0), child: Image.asset('assets/logo.png', errorBuilder: (c,o,s)=>const Icon(Icons.tv, color: Colors.red))),
+        actions: [IconButton(icon: const Icon(Icons.info_outline, color: Colors.white70), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => InfoPage(config: appConfig))))],
       ),
+      body: RefreshIndicator(
+        onRefresh: () async { await fetchConfig(); },
+        color: Colors.redAccent, backgroundColor: const Color(0xFF1E1E1E),
+        child: isConfigLoading 
+            ? const Center(child: SpinKitFadingCircle(color: Colors.redAccent, size: 50))
+            : Column(children: [
+                  // Notice - EXACT mxlive design
+                  if(appConfig.notice.isNotEmpty) Container(height: 35, margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.redAccent.withOpacity(0.3))), child: ClipRRect(borderRadius: BorderRadius.circular(30), child: Row(children: [Container(padding: const EdgeInsets.symmetric(horizontal: 12), color: Colors.redAccent.withOpacity(0.15), height: double.infinity, child: const Icon(Icons.campaign_rounded, size: 18, color: Colors.redAccent)), Expanded(child: Marquee(text: appConfig.notice, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w500), scrollAxis: Axis.horizontal, blankSpace: 20.0, velocity: 40.0, startPadding: 10.0))]))),
+                  
+                  // Search - EXACT mxlive design
+                  Container(height: 45, margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 5), decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(30), border: Border.all(color: Colors.white10)), child: TextField(controller: searchController, onChanged: _onSearchChanged, style: const TextStyle(color: Colors.white), cursorColor: Colors.redAccent, decoration: InputDecoration(hintText: "Search Channels...", hintStyle: TextStyle(color: Colors.grey.shade600, fontSize: 14), prefixIcon: const Icon(Icons.search, color: Colors.grey), suffixIcon: searchController.text.isNotEmpty ? IconButton(icon: const Icon(Icons.clear, size: 18, color: Colors.grey), onPressed: () { searchController.clear(); _onSearchChanged(""); }) : null, border: InputBorder.none, contentPadding: const EdgeInsets.symmetric(vertical: 10)))),
+                  
+                  const SizedBox(height: 10),
+                  
+                  // Server List (If multiple) - EXACT mxlive design
+                  if(appConfig.servers.length > 1) SizedBox(height: 38, child: ListView.builder(scrollDirection: Axis.horizontal, padding: const EdgeInsets.symmetric(horizontal: 16), itemCount: appConfig.servers.length, itemBuilder: (ctx, index) { final srv = appConfig.servers[index]; final isSelected = selectedServer?.id == srv.id; return Padding(padding: const EdgeInsets.only(right: 10), child: GestureDetector(onTap: () { setState(() => selectedServer = srv); loadPlaylist(srv.url); }, child: Container(padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), decoration: BoxDecoration(color: isSelected ? Colors.blueAccent : const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(20), border: isSelected ? null : Border.all(color: Colors.white10)), child: Text(srv.name, style: TextStyle(color: isSelected ? Colors.white : Colors.grey, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal))))); })),
+                  
+                  const Divider(color: Colors.white10, height: 20),
+                  
+                  // Channel Grid - EXACT mxlive design
+                  Expanded(child: isPlaylistLoading ? const Center(child: SpinKitPulse(color: Colors.blueAccent, size: 40)) : _buildGroupedChannelList()),
+                ]),
+      ),
+    );
+  }
+
+  Widget _buildGroupedChannelList() {
+    if (groupedChannels.isEmpty) return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.sentiment_dissatisfied, size: 50, color: Colors.grey), const SizedBox(height: 10), const Text("No channels found", style: TextStyle(color: Colors.grey)), const SizedBox(height: 20), ElevatedButton.icon(onPressed: () => fetchConfig(), icon: const Icon(Icons.refresh), label: const Text("Retry"), style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white))]));
+    return ListView.builder(padding: const EdgeInsets.only(bottom: 20), itemCount: groupedChannels.length, itemBuilder: (context, index) {
+        String groupName = groupedChannels.keys.elementAt(index); List<Channel> channels = groupedChannels[groupName]!;
+        return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Padding(padding: const EdgeInsets.fromLTRB(20, 15, 20, 8), child: Row(children: [Container(width: 4, height: 16, color: Colors.redAccent, margin: const EdgeInsets.only(right: 8)), Text(groupName, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white)), const Spacer(), Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2), decoration: BoxDecoration(color: Colors.white10, borderRadius: BorderRadius.circular(10)), child: Text("${channels.length}", style: TextStyle(color: Colors.grey.shade400, fontSize: 10)))])),
+            GridView.builder(padding: const EdgeInsets.symmetric(horizontal: 16), shrinkWrap: true, physics: const NeverScrollableScrollPhysics(), gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 4, childAspectRatio: 0.85, crossAxisSpacing: 10, mainAxisSpacing: 10), itemCount: channels.length, itemBuilder: (ctx, i) { final channel = channels[i]; return GestureDetector(onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerScreen(channel: channel, allChannels: allChannels))), child: Container(decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.05))), child: Column(children: [Expanded(child: Padding(padding: const EdgeInsets.all(8.0), child: ChannelLogo(url: channel.logo))), Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4), decoration: const BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.vertical(bottom: Radius.circular(12))), child: Text(channel.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 10, color: Colors.white70), textAlign: TextAlign.center))]))); }),
+          ]);
+      },
     );
   }
 }
 
-// --- INFO PAGE ---
-class InfoPage extends StatelessWidget {
-  const InfoPage({super.key});
+// --- PLAYER SCREEN (mxlive Design) ---
+class PlayerScreen extends StatefulWidget {
+  final Channel channel; final List<Channel> allChannels;
+  const PlayerScreen({super.key, required this.channel, required this.allChannels});
+  @override
+  State<PlayerScreen> createState() => _PlayerScreenState();
+}
 
+class _PlayerScreenState extends State<PlayerScreen> {
+  late PodPlayerController _podController; late List<Channel> relatedChannels; bool isError = false;
+  @override
+  void initState() {
+    super.initState(); WakelockPlus.enable();
+    relatedChannels = widget.allChannels.where((c) => c.group == widget.channel.group && c.name != widget.channel.name).toList();
+    _initializePlayer();
+  }
+  Future<void> _initializePlayer() async {
+    setState(() { isError = false; });
+    try {
+      _podController = PodPlayerController(playVideoFrom: PlayVideoFrom.network(widget.channel.url, httpHeaders: widget.channel.headers), podPlayerConfig: const PodPlayerConfig(autoPlay: true, isLooping: true, videoQualityPriority: [720, 1080, 480], wakelockEnabled: true))..initialise().then((_) { if(mounted) setState(() {}); });
+      _podController.addListener(() { if (_podController.videoPlayerValue?.hasError ?? false) { if(mounted) setState(() { isError = true; }); } });
+    } catch (e) { if(mounted) setState(() { isError = true; }); }
+  }
+  @override
+  void dispose() { try { _podController.dispose(); } catch(e) {} SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]); WakelockPlus.disable(); super.dispose(); }
   @override
   Widget build(BuildContext context) {
-    final config = Provider.of<AppDataProvider>(context).config;
     return Scaffold(
-      appBar: AppBar(title: const Text("Information")),
-      body: ListView(
-        padding: const EdgeInsets.all(25),
-        children: [
-          Center(child: Image.asset(logoPath, height: 90)),
-          const SizedBox(height: 25),
-          const Center(child: Text(appName, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: 2))),
-          const Center(child: Text("VERSION 1.0.0", style: TextStyle(color: Colors.grey, fontSize: 10, letterSpacing: 3))),
-          const SizedBox(height: 40),
-          
-          _sectionTitle("DEVELOPER"),
-          _infoTile(Icons.code, developerName, null),
-          
-          const SizedBox(height: 20),
-          _sectionTitle("ABOUT"),
-          _infoTile(Icons.info_outline, config['about_notice'], null),
-          
-          if (config['show_update']) ...[
-            const SizedBox(height: 20),
-            _sectionTitle("UPDATES"),
-            _infoTile(Icons.system_update, config['update_note'], () => launchUrl(Uri.parse(config['dl_url']))),
-          ],
-          
-          const SizedBox(height: 20),
-          _sectionTitle("COMMUNITY"),
-          _infoTile(Icons.telegram, "Join Official Channel", () => launchUrl(Uri.parse(config['telegram_url']))),
-        ],
-      ),
+      appBar: AppBar(title: Text(widget.channel.name)),
+      body: SafeArea(child: Column(children: [
+            AspectRatio(aspectRatio: 16 / 9, child: Container(color: Colors.black, child: isError ? Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [const Icon(Icons.error_outline, color: Colors.red, size: 40), const SizedBox(height: 10), const Text("Stream Offline", style: TextStyle(color: Colors.white)), TextButton(onPressed: _initializePlayer, child: const Text("Retry"))])) : PodVideoPlayer(controller: _podController))),
+            Expanded(child: Column(children: [
+                  GestureDetector(onTap: () => launchUrl(Uri.parse(telegramUrl), mode: LaunchMode.externalApplication), child: Container(width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 14), color: const Color(0xFF0088CC), child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [Icon(Icons.telegram, color: Colors.white), SizedBox(width: 10), Text("JOIN TELEGRAM CHANNEL", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1))]))),
+                  const Padding(padding: EdgeInsets.all(12), child: Align(alignment: Alignment.centerLeft, child: Text("More Channels", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey)))),
+                  Expanded(child: ListView.builder(padding: const EdgeInsets.symmetric(horizontal: 10), itemCount: relatedChannels.length, itemBuilder: (ctx, index) { final ch = relatedChannels[index]; return ListTile(contentPadding: const EdgeInsets.symmetric(vertical: 4, horizontal: 8), leading: Container(width: 60, height: 40, decoration: BoxDecoration(color: const Color(0xFF1E1E1E), borderRadius: BorderRadius.circular(6)), child: ChannelLogo(url: ch.logo)), title: Text(ch.name, style: const TextStyle(color: Colors.white)), subtitle: Text(ch.group, style: const TextStyle(color: Colors.grey, fontSize: 10)), trailing: const Icon(Icons.play_circle_outline, color: Colors.redAccent), onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerScreen(channel: ch, allChannels: widget.allChannels)))); })),
+                ])),
+          ])),
     );
   }
+}
 
-  Widget _sectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10, left: 5),
-      child: Text(title, style: const TextStyle(color: kAccentColor, fontSize: 11, fontWeight: FontWeight.bold)),
-    );
-  }
-
-  Widget _infoTile(IconData icon, String text, VoidCallback? onTap) {
-    return Container(
-      decoration: BoxDecoration(color: kSurfaceColor, borderRadius: BorderRadius.circular(8)),
-      child: ListTile(
-        leading: Icon(icon, color: kTextPrimary, size: 20),
-        title: Text(text, style: const TextStyle(fontSize: 14)),
-        trailing: onTap != null ? const Icon(Icons.arrow_forward_ios, size: 14, color: Colors.grey) : null,
-        onTap: onTap,
-      ),
-    );
+// --- INFO PAGE (mxlive Design) ---
+class InfoPage extends StatelessWidget {
+  final AppConfig config; const InfoPage({super.key, required this.config});
+  @override
+  Widget build(BuildContext context) { final update = config.updateData; final hasUpdate = update != null && update['show'] == true;
+    return Scaffold(appBar: AppBar(title: const Text("About & Updates")), body: SingleChildScrollView(padding: const EdgeInsets.all(20), child: Column(children: [
+            if (hasUpdate) Container(width: double.infinity, margin: const EdgeInsets.only(bottom: 20), padding: const EdgeInsets.all(20), decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFF007AFF), Color(0xFF00C6FF)]), borderRadius: BorderRadius.circular(16), boxShadow: [BoxShadow(color: Colors.blueAccent.withOpacity(0.4), blurRadius: 10)]), child: Column(children: [const Icon(Icons.system_update, color: Colors.white, size: 40), const SizedBox(height: 10), Text(update!['version'] ?? "Update Available", style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)), const SizedBox(height: 5), Text(update['note'] ?? "New features are here!", textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)), const SizedBox(height: 15), ElevatedButton(onPressed: () { if (update['download_url'] != null) launchUrl(Uri.parse(update['download_url']), mode: LaunchMode.externalApplication); }, style: ElevatedButton.styleFrom(backgroundColor: Colors.white, foregroundColor: Colors.blueAccent), child: const Text("Download Now"))])),
+            const SizedBox(height: 20), Text(config.aboutNotice, style: const TextStyle(color: Colors.grey, height: 1.5), textAlign: TextAlign.center), const SizedBox(height: 40), const Divider(color: Colors.white10), ListTile(contentPadding: EdgeInsets.zero, leading: const CircleAvatar(backgroundColor: Colors.redAccent, child: Icon(Icons.person, color: Colors.white)), title: Text("Developed by $developerName"), subtitle: const Text("- Developer"), trailing: IconButton(icon: const Icon(Icons.email, color: Colors.white), onPressed: () => launchUrl(Uri.parse(contactEmail)))),
+          ])));
   }
 }
