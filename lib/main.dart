@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
@@ -13,27 +12,26 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // --- CONFIGURATION ---
-const String appName = "Araimo";
+const String appName = "araimo";
 const String developerName = "sultanarabi161";
 const String logoPath = "assets/logo.png";
 const String customUserAgent = "AraimoPlayer/2.0 (Linux; Android 10) ExoPlayerLib/2.18.1";
 const String configJsonUrl = "https://raw.githubusercontent.com/mxonlive/araimo/refs/heads/main/data.json";
 
-// --- MODERN THEME PALETTE ---
-const Color kPrimaryRed = Color(0xFFFF1744); // Neon Red
-const Color kBackground = Color(0xFF0F0F0F); // Deep Black
-const Color kSurface = Color(0xFF1C1C1E);    // Card Grey
-const Color kAccent = Color(0xFF2C2C2E);     // Lighter Grey
-const Color kTextWhite = Colors.white;
-const Color kTextGrey = Colors.white54;
+// --- FLAT THEME PALETTE ---
+const Color kRed = Color(0xFFE50914);        // Flat Red
+const Color kBlack = Color(0xFF000000);      // Pure Black
+const Color kDarkGrey = Color(0xFF121212);   // Secondary Background
+const Color kCardColor = Color(0xFF1E1E1E);  // Flat Card
+const Color kBorderColor = Color(0xFF333333);// Subtle Border
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-    statusBarColor: Colors.transparent,
+    statusBarColor: kBlack,
     statusBarIconBrightness: Brightness.light,
-    systemNavigationBarColor: kBackground,
+    systemNavigationBarColor: kBlack,
   ));
   
   runApp(
@@ -55,23 +53,23 @@ class AraimoApp extends StatelessWidget {
       theme: ThemeData(
         useMaterial3: true,
         brightness: Brightness.dark,
-        scaffoldBackgroundColor: kBackground,
-        primaryColor: kPrimaryRed,
+        scaffoldBackgroundColor: kBlack,
+        primaryColor: kRed,
         colorScheme: const ColorScheme.dark(
-          primary: kPrimaryRed,
-          surface: kSurface,
-          background: kBackground,
-          secondary: kPrimaryRed,
+          primary: kRed,
+          surface: kCardColor,
+          background: kBlack,
         ),
-        textTheme: GoogleFonts.outfitTextTheme(Theme.of(context).textTheme).apply(
-          bodyColor: kTextWhite,
-          displayColor: kTextWhite,
+        textTheme: GoogleFonts.interTextTheme(Theme.of(context).textTheme).apply(
+          bodyColor: Colors.white,
+          displayColor: Colors.white,
         ),
         appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.transparent,
+          backgroundColor: kBlack,
           elevation: 0,
           centerTitle: false,
           scrolledUnderElevation: 0,
+          titleTextStyle: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: kRed),
         ),
       ),
       home: const HomePage(),
@@ -79,14 +77,14 @@ class AraimoApp extends StatelessWidget {
   }
 }
 
-// --- DATA LOGIC (UNCHANGED CORE LOGIC) ---
+// --- DATA LOGIC ---
 class AppDataProvider extends ChangeNotifier {
   List<dynamic> allChannels = [];
   List<String> groups = ["All"];
   List<dynamic> displayedChannels = [];
   String selectedGroup = "All";
   Map<String, dynamic> config = {
-    "notice": "Loading updates...",
+    "notice": "Loading...",
     "playlist_url": "",
     "about_notice": "",
     "telegram_url": "",
@@ -106,7 +104,7 @@ class AppDataProvider extends ChangeNotifier {
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         config = {
-          "notice": data['notice'] ?? "Welcome to Araimo Stream",
+          "notice": data['notice'] ?? "Welcome",
           "playlist_url": data['playlist_url'] ?? "",
           "about_notice": data['about_notice'] ?? "",
           "telegram_url": data['telegram_url'] ?? "",
@@ -163,7 +161,7 @@ class AppDataProvider extends ChangeNotifier {
   }
 }
 
-// --- MODERN HOME PAGE ---
+// --- HOME PAGE (FLAT DESIGN) ---
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
@@ -172,233 +170,129 @@ class HomePage extends StatelessWidget {
     final provider = Provider.of<AppDataProvider>(context);
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        titleSpacing: 20,
+        title: Text(appName.toUpperCase(), style: const TextStyle(letterSpacing: 2)),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.info_outline, color: Colors.white70),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage())),
+          ),
+          const SizedBox(width: 10),
+        ],
+      ),
       body: provider.isLoading
-          ? const LoadingScreen()
-          : CustomScrollView(
-              slivers: [
-                // 1. Smart Sliver App Bar
-                SliverAppBar(
-                  floating: true,
-                  pinned: true,
-                  snap: false,
-                  backgroundColor: kBackground.withOpacity(0.9),
-                  expandedHeight: 80,
-                  flexibleSpace: FlexibleSpaceBar(
-                    titlePadding: const EdgeInsets.only(left: 20, bottom: 16),
-                    title: Row(
-                      children: [
-                        Text(
-                          appName.toUpperCase(),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              letterSpacing: 2,
-                              color: kPrimaryRed,
-                              fontSize: 22),
-                        ),
-                        const Spacer(),
-                        _GlassIconButton(
-                          icon: Icons.info_outline,
-                          onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const InfoPage())),
-                        ),
-                        const SizedBox(width: 16),
-                      ],
-                    ),
+          ? const Center(child: CircularProgressIndicator(color: kRed))
+          : Column(
+              children: [
+                // 1. Flat Notification Bar
+                Container(
+                  width: double.infinity,
+                  height: 36,
+                  color: kDarkGrey,
+                  child: Marquee(
+                    text: provider.config['notice'] + "     •     ",
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                    velocity: 30,
+                    blankSpace: 20,
                   ),
                 ),
 
-                // 2. Breaking News / Notice Ticker
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    child: Container(
-                      height: 45,
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(colors: [kSurface, kSurface.withOpacity(0.5)]),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.white.withOpacity(0.05)),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            height: double.infinity,
-                            decoration: const BoxDecoration(
-                              color: kPrimaryRed,
-                              borderRadius: BorderRadius.only(topLeft: Radius.circular(12), bottomLeft: Radius.circular(12)),
-                            ),
-                            child: const Icon(Icons.flash_on, color: Colors.white, size: 20),
+                const SizedBox(height: 10),
+
+                // 2. Categories (Flat Chips)
+                SizedBox(
+                  height: 40,
+                  child: ListView.builder(
+                    scrollDirection: Axis.horizontal,
+                    itemCount: provider.groups.length,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemBuilder: (context, index) {
+                      final group = provider.groups[index];
+                      final isSelected = group == provider.selectedGroup;
+                      return GestureDetector(
+                        onTap: () => provider.filterChannels(group),
+                        child: Container(
+                          margin: const EdgeInsets.only(right: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          decoration: BoxDecoration(
+                            color: isSelected ? kRed : Colors.transparent,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: isSelected ? kRed : kBorderColor),
                           ),
-                          Expanded(
-                            child: Marquee(
-                              text: provider.config['notice'] + "      ●      ",
-                              style: const TextStyle(color: kTextWhite, fontWeight: FontWeight.w600),
-                              velocity: 30,
-                              blankSpace: 20,
-                              startAfter: const Duration(seconds: 2),
+                          alignment: Alignment.center,
+                          child: Text(
+                            group,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                              color: isSelected ? Colors.white : Colors.grey,
                             ),
                           ),
-                        ],
-                      ),
-                    ),
+                        ),
+                      );
+                    },
                   ),
                 ),
 
-                // 3. Category Chips (Horizontal Scroll)
-                SliverToBoxAdapter(
-                  child: Container(
-                    height: 60,
-                    margin: const EdgeInsets.symmetric(vertical: 8),
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: provider.groups.length,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      physics: const BouncingScrollPhysics(),
-                      itemBuilder: (context, index) {
-                        final group = provider.groups[index];
-                        final isSelected = group == provider.selectedGroup;
-                        return GestureDetector(
-                          onTap: () => provider.filterChannels(group),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 300),
-                            margin: const EdgeInsets.only(right: 10),
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                            decoration: BoxDecoration(
-                              color: isSelected ? kPrimaryRed : kSurface,
-                              borderRadius: BorderRadius.circular(30),
-                              boxShadow: isSelected 
-                                ? [BoxShadow(color: kPrimaryRed.withOpacity(0.4), blurRadius: 12, offset: const Offset(0, 4))] 
-                                : [],
-                              border: Border.all(color: isSelected ? kPrimaryRed : Colors.white12),
-                            ),
-                            alignment: Alignment.center,
-                            child: Text(
-                              group,
-                              style: TextStyle(
-                                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-                                color: isSelected ? Colors.white : kTextGrey,
+                const SizedBox(height: 10),
+
+                // 3. Grid (4 Columns, Flat Cards)
+                Expanded(
+                  child: GridView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 4, // 4 items per row
+                      childAspectRatio: 0.75, // Taller to fit text
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 15,
+                    ),
+                    itemCount: provider.displayedChannels.length,
+                    itemBuilder: (context, index) {
+                      final channel = provider.displayedChannels[index];
+                      return GestureDetector(
+                        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: channel))),
+                        child: Column(
+                          children: [
+                            // Logo Box
+                            Expanded(
+                              child: Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: kCardColor,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: kBorderColor),
+                                ),
+                                child: CachedNetworkImage(
+                                  imageUrl: channel['logo'],
+                                  fit: BoxFit.contain,
+                                  errorWidget: (_,__,___) => const Icon(Icons.tv, color: Colors.grey, size: 30),
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
+                            const SizedBox(height: 6),
+                            // Text Name
+                            Text(
+                              channel['name'],
+                              maxLines: 2,
+                              textAlign: TextAlign.center,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 10, color: Colors.white70, height: 1.1),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
                 ),
-
-                // 4. Channel Grid (Masonry/Standard Hybrid)
-                SliverPadding(
-                  padding: const EdgeInsets.all(16),
-                  sliver: SliverGrid(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) {
-                        final channel = provider.displayedChannels[index];
-                        return ChannelCard(channel: channel);
-                      },
-                      childCount: provider.displayedChannels.length,
-                    ),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3, // 3 Columns for better visibility
-                      childAspectRatio: 0.85,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                    ),
-                  ),
-                ),
-                
-                // Bottom Padding
-                const SliverToBoxAdapter(child: SizedBox(height: 50)),
               ],
             ),
     );
   }
 }
 
-// --- SMART CHANNEL CARD ---
-class ChannelCard extends StatelessWidget {
-  final Map<String, dynamic> channel;
-  const ChannelCard({super.key, required this.channel});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: channel))),
-      child: Container(
-        decoration: BoxDecoration(
-          color: kSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.05)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
-          ],
-        ),
-        child: Column(
-          children: [
-            // Logo Area
-            Expanded(
-              flex: 3,
-              child: Stack(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.03),
-                      borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                    ),
-                    child: Hero(
-                      tag: channel['url'], // Simple unique tag
-                      child: CachedNetworkImage(
-                        imageUrl: channel['logo'],
-                        fit: BoxFit.contain,
-                        errorWidget: (_,__,___) => Icon(Icons.tv_rounded, size: 40, color: Colors.white.withOpacity(0.2)),
-                      ),
-                    ),
-                  ),
-                  // Live Badge
-                  Positioned(
-                    top: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: kPrimaryRed,
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text("LIVE", style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold)),
-                    ),
-                  )
-                ],
-              ),
-            ),
-            // Text Area
-            Expanded(
-              flex: 1,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                decoration: const BoxDecoration(
-                  color: kSurface,
-                  borderRadius: BorderRadius.vertical(bottom: Radius.circular(16)),
-                ),
-                alignment: Alignment.center,
-                child: Text(
-                  channel['name'],
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500, color: kTextWhite),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// --- MODERN PLAYER PAGE ---
+// --- PLAYER PAGE (CLEAN & FLAT) ---
 class PlayerPage extends StatefulWidget {
   final Map<String, dynamic> channel;
   const PlayerPage({super.key, required this.channel});
@@ -432,11 +326,7 @@ class _PlayerPageState extends State<PlayerPage> {
         aspectRatio: 16 / 9,
         allowFullScreen: true,
         showControls: true,
-        errorBuilder: (context, errorMessage) {
-          return Center(child: Text("Stream Offline", style: TextStyle(color: kPrimaryRed)));
-        },
-        materialProgressColors: ChewieProgressColors(playedColor: kPrimaryRed, handleColor: kPrimaryRed, backgroundColor: Colors.grey),
-        cupertinoProgressColors: ChewieProgressColors(playedColor: kPrimaryRed, handleColor: kPrimaryRed),
+        materialProgressColors: ChewieProgressColors(playedColor: kRed, handleColor: kRed, backgroundColor: Colors.grey[800]!),
       );
       setState(() {});
     } catch (e) {
@@ -460,71 +350,35 @@ class _PlayerPageState extends State<PlayerPage> {
         .toList();
 
     return Scaffold(
-      backgroundColor: kBackground,
+      backgroundColor: kBlack,
       body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. VIDEO PLAYER CONTAINER
+            // 1. Player
             AspectRatio(
               aspectRatio: 16 / 9,
               child: Container(
                 color: Colors.black,
-                child: Stack(
-                  children: [
-                    isError 
-                      ? Center(child: Column(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.error_outline, color: kPrimaryRed, size: 40),
-                          SizedBox(height: 10),
-                          Text("Stream Error", style: TextStyle(color: Colors.grey))
-                        ])) 
-                      : (_cc != null ? Chewie(controller: _cc!) : const Center(child: CircularProgressIndicator(color: kPrimaryRed))),
-                    
-                    // Simple Back Button Overlay
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(color: Colors.black45, shape: BoxShape.circle),
-                          child: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                child: isError 
+                  ? const Center(child: Icon(Icons.error_outline, color: kRed)) 
+                  : (_cc != null ? Chewie(controller: _cc!) : const Center(child: CircularProgressIndicator(color: kRed))),
               ),
             ),
 
-            // 2. CHANNEL INFO
+            // 2. Simple Info Bar
             Container(
-              padding: const EdgeInsets.all(20),
-              decoration: const BoxDecoration(
-                color: kSurface,
-                borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-              ),
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              color: kCardColor,
               child: Row(
                 children: [
-                  Container(
-                    width: 50,
-                    height: 50,
-                    padding: const EdgeInsets.all(5),
-                    decoration: BoxDecoration(
-                      color: kBackground,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: CachedNetworkImage(imageUrl: widget.channel['logo'], errorWidget: (_,__,___)=>Icon(Icons.tv, color: Colors.grey)),
-                  ),
-                  const SizedBox(width: 15),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(widget.channel['name'], style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
-                        const SizedBox(height: 4),
-                        Text(widget.channel['group'], style: TextStyle(fontSize: 12, color: kPrimaryRed)),
+                        Text(widget.channel['name'], style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 2),
+                        Text(widget.channel['group'], style: const TextStyle(fontSize: 11, color: kRed)),
                       ],
                     ),
                   ),
@@ -532,39 +386,60 @@ class _PlayerPageState extends State<PlayerPage> {
               ),
             ),
 
-            // 3. RELATED HEADER
+            const SizedBox(height: 10),
+
+            // 3. Related List (Flat Style)
             if (related.isNotEmpty) ...[
-              const Padding(
-                padding: EdgeInsets.fromLTRB(20, 25, 20, 10),
-                child: Text("YOU MIGHT ALSO LIKE", style: TextStyle(color: kTextGrey, fontWeight: FontWeight.w700, fontSize: 12, letterSpacing: 1)),
+               const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 16, vertical: 5),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text("RELATED CHANNELS", style: TextStyle(color: Colors.grey, fontSize: 11, fontWeight: FontWeight.bold)),
+                ),
               ),
-              
-              // 4. RELATED LIST (Modern List Tiles)
               Expanded(
                 child: ListView.separated(
-                  physics: const BouncingScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 5),
                   itemCount: related.length,
-                  separatorBuilder: (_,__) => const SizedBox(height: 10),
+                  separatorBuilder: (_,__) => const SizedBox(height: 8),
                   itemBuilder: (context, index) {
                     final item = related[index];
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: kSurface,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: ListTile(
-                        onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: item))),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                        leading: Container(
-                          width: 60,
-                          height: 40,
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(color: Colors.black26, borderRadius: BorderRadius.circular(8)),
-                          child: CachedNetworkImage(imageUrl: item['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=>const Icon(Icons.tv, size: 20)),
+                    return GestureDetector(
+                      onTap: () => Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => PlayerPage(channel: item))),
+                      child: Container(
+                        height: 50,
+                        decoration: BoxDecoration(
+                          color: kCardColor,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: kBorderColor),
                         ),
-                        title: Text(item['name'], maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
-                        trailing: const Icon(Icons.play_circle_fill_rounded, color: kPrimaryRed, size: 28),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 50,
+                              height: 50,
+                              padding: const EdgeInsets.all(6),
+                              decoration: const BoxDecoration(
+                                color: Colors.black26,
+                                borderRadius: BorderRadius.only(topLeft: Radius.circular(6), bottomLeft: Radius.circular(6)),
+                              ),
+                              child: CachedNetworkImage(imageUrl: item['logo'], fit: BoxFit.contain, errorWidget: (_,__,___)=> const Icon(Icons.tv, size: 18)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                item['name'],
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13, color: Colors.white),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(right: 12),
+                              child: Icon(Icons.play_arrow, color: kRed, size: 20),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
@@ -578,7 +453,7 @@ class _PlayerPageState extends State<PlayerPage> {
   }
 }
 
-// --- INFO / SETTINGS PAGE ---
+// --- INFO PAGE ---
 class InfoPage extends StatelessWidget {
   const InfoPage({super.key});
 
@@ -586,100 +461,37 @@ class InfoPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final config = Provider.of<AppDataProvider>(context).config;
     return Scaffold(
-      appBar: AppBar(title: const Text("App Info", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+      appBar: AppBar(title: const Text("Settings")),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
+          Image.asset(logoPath, height: 60),
           const SizedBox(height: 20),
-          Center(
-            child: Container(
-              height: 100, width: 100,
-              decoration: BoxDecoration(
-                color: kSurface,
-                shape: BoxShape.circle,
-                border: Border.all(color: kPrimaryRed, width: 2),
-                boxShadow: [BoxShadow(color: kPrimaryRed.withOpacity(0.3), blurRadius: 20)]
-              ),
-              child: Image.asset(logoPath, fit: BoxFit.scaleDown),
-            ),
-          ),
-          const SizedBox(height: 20),
-          Center(child: Text(appName, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold))),
-          Center(child: Text("v2.0 • Build by $developerName", style: const TextStyle(color: Colors.grey))),
-          const SizedBox(height: 40),
-          
-          _SettingsTile(title: "About Us", sub: config['about_notice'], icon: Icons.info_rounded),
-          if (config['show_update'])
-            _SettingsTile(title: "Update Available", sub: "Ver: ${config['update_ver']}", icon: Icons.system_update_rounded, isHighlight: true, url: config['dl_url']),
-          _SettingsTile(title: "Community", sub: "Join our Telegram", icon: Icons.telegram, url: config['telegram_url']),
+          const Center(child: Text(appName, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold))),
+          const SizedBox(height: 30),
+          _flatTile("Update", config['update_note'], Icons.system_update_alt, onTap: () => launchUrl(Uri.parse(config['dl_url'])), show: config['show_update']),
+          _flatTile("About", config['about_notice'], Icons.info_outline),
+          _flatTile("Telegram", "Join Community", Icons.send, onTap: () => launchUrl(Uri.parse(config['telegram_url']))),
         ],
       ),
     );
   }
-}
 
-class _SettingsTile extends StatelessWidget {
-  final String title, sub;
-  final IconData icon;
-  final bool isHighlight;
-  final String? url;
-  const _SettingsTile({required this.title, required this.sub, required this.icon, this.isHighlight = false, this.url});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _flatTile(String title, String sub, IconData icon, {VoidCallback? onTap, bool show = true}) {
+    if (!show) return const SizedBox.shrink();
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
-        color: isHighlight ? kPrimaryRed.withOpacity(0.1) : kSurface,
-        borderRadius: BorderRadius.circular(12),
-        border: isHighlight ? Border.all(color: kPrimaryRed) : Border.all(color: Colors.white10),
+        color: kCardColor,
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: kBorderColor),
       ),
       child: ListTile(
-        leading: Icon(icon, color: isHighlight ? kPrimaryRed : Colors.white),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-        subtitle: Text(sub, style: TextStyle(color: Colors.grey[400], fontSize: 12)),
-        trailing: const Icon(Icons.arrow_forward_ios_rounded, size: 16, color: Colors.grey),
-        onTap: url != null ? () => launchUrl(Uri.parse(url!)) : null,
-      ),
-    );
-  }
-}
-
-// --- HELPER WIDGETS ---
-class _GlassIconButton extends StatelessWidget {
-  final IconData icon;
-  final VoidCallback onTap;
-  const _GlassIconButton({required this.icon, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(8),
-        decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.1),
-          shape: BoxShape.circle,
-        ),
-        child: Icon(icon, color: Colors.white, size: 22),
-      ),
-    );
-  }
-}
-
-class LoadingScreen extends StatelessWidget {
-  const LoadingScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const CircularProgressIndicator(color: kPrimaryRed),
-          const SizedBox(height: 20),
-          Text("Getting things ready...", style: GoogleFonts.poppins(color: Colors.grey)),
-        ],
+        leading: Icon(icon, color: Colors.white70),
+        title: Text(title, style: const TextStyle(fontSize: 14)),
+        subtitle: Text(sub, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+        onTap: onTap,
+        trailing: const Icon(Icons.chevron_right, color: Colors.grey, size: 18),
       ),
     );
   }
